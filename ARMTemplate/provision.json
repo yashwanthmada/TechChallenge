@@ -1,0 +1,967 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "VirtualNetworkName": {
+        "type": "string",
+        "metadata": {
+            "description": "description"
+        }
+       },
+         "VnetAddressPrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "CIDR address for Virtual network"
+            }
+        },
+        "AppSubnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "AppServers Subnet Name"
+            }
+        },
+        "AppSubnetPrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "CIDR Address for App servers Subnet"
+            }
+        },
+        "WebSubnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "WebServers Subnet Name"
+            }
+        },
+        "WebsubnetPrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "CIDR Address for Web servers Subnet"
+            }
+        },
+        "SQLSubnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "SQLServers Subnet Name"
+            }
+        },
+        "SQLSubnetPrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "CIDR Address for SQL servers Subnet"
+            }
+        },
+         "AppServersNSG": {
+            "type": "string",
+            "metadata": {
+                "description": "NSG for App servers"
+            }
+        },
+         "WebServersNSG": {
+            "type": "string",
+            "metadata": {
+                "description": "NSG for Web servers"
+            }
+        },
+        "SQLServersNSG": {
+            "type": "string",
+            "metadata": {
+                "description": "NSG for SQL servers"
+            }
+        },
+        "AllServers": {
+            "type": "array",
+            "metadata": {
+                "description": "This array includes all servers (App,Web,SQL)"
+            }
+        },
+        "AppServers": {
+            "type": "array",
+            "metadata": {
+                "description": "NSG for SQL servers"
+            }
+        },
+        "SQLServers": {
+          "type": "array",
+              "metadata": {
+              "description": "SQL servers"
+          }
+        },
+        "WebServers": {
+          "type": "array",
+              "metadata": {
+              "description": "Web servers"
+          }
+        },
+        "AppServersSize": {
+            "type": "string",
+            "defaultValue": "Standard_E8as_v4",
+            "metadata": {
+                "description": "Size of the AppServers"
+            }
+        },
+         "WebServersSize": {
+            "type": "string",
+            "defaultValue": "Standard_E8as_v4",
+            "metadata": {
+                "description": "Size of the WebServers"
+            }
+        },
+         "SQLServersSize": {
+            "type": "string",
+            "defaultValue": "Standard_E8as_v4",
+            "metadata": {
+                "description": "Size of the SQLServers"
+            }
+        },
+        "DomainAdminUsername": {
+            "defaultValue": "Systemadmin",
+            "type": "string"
+        },
+        "DomainAdminPassword": {
+            "type": "securestring"
+        },
+        "VmWindowsOSVersion": {
+            "type": "string",
+            "defaultValue": "2019-Datacenter",
+            "metadata": {
+                "description": "VMs OS version"
+            }   
+        },
+        "zoneCount": {
+            "type": "int",
+            "defaultValue": 2,
+            "metadata": {
+                "description": "number of zones"
+            }
+        },
+         "AppPrivateLBName": {
+            "type": "string",
+            "defaultValue": "appservers-lb",
+            "metadata": {
+                "description": "Name of a new private load balancer for AppServers"
+            }
+        },
+        "WebPublicLBName": {
+            "type": "string",
+            "defaultValue": "webservers-lb",
+            "metadata": {
+                "description": "Name of a new Public load balancer for WebServers"
+            }
+        },
+        "SqlPrivateLBName": {
+            "type": "string",
+            "defaultValue": "sqlservers-lb",
+            "metadata": {
+                "description": "Name of a new private load balancer for SQLServers"
+            }
+        },
+        "LogAnalyticsWorkspaceId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Log Analytics workspace ID"
+            }
+        },
+        "LogAnalyticsWorkspaceKey": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "Log Analytics workspace key"
+            }
+        },      
+        "tags": {
+            "type": "string",
+            "metadata": {
+                "description": "tag for resources"
+            }
+        }
+    },           
+    "functions": [],
+    "variables": {
+        "VMImagePublisher": "MicrosoftWindowsServer",
+        "VMImageOffer": "WindowsServer",
+        "virtualNetworkName": "[parameters('virtualNetworkName')]",
+        "AppSubnetName": "[parameters('AppSubnetName')]",
+        "WebSubnetName": "[parameters('WebSubnetName')]",
+        "SQLSubnetName": "[parameters('SQLSubnetName')]",
+        "vnetID": "[resourceId(resourceGroup().Name, 'Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]",
+        "SubnetAppRef": "[concat(variables('vnetID'),'/subnets/', variables('AppSubnetName'))]",
+        "SubnetWebRef": "[concat(variables('vnetID'),'/subnets/', variables('WebSubnetName'))]",
+        "SubnetSQLRef": "[concat(variables('vnetID'),'/subnets/', variables('SQLSubnetName'))]",
+        "WebPublicLBName-publicIP": "[concat(parameters('WebPublicLBName'), '-publicIP')]",
+        "OsType": "windows",
+        "MmaExtensionName": "[if(equals(toLower(variables('OsType')), 'windows'), 'MMAExtension', 'OMSExtension')]",
+        "MmaExtensionType": "[if(equals(toLower(variables('OsType')), 'windows'), 'MicrosoftMonitoringAgent', 'OmsAgentForLinux')]",
+        "MmaExtensionVersion": "[if(equals(toLower(variables('OsType')), 'windows'), '1.0', '1.4')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2021-02-01",
+            "name": "[parameters('WebServersNSG')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Team": "[parameters('tags')]",
+                  "properties": {
+                "securityRules": [
+                {
+                    "name": "Allow-RDP-3389",
+                    "properties": {
+                    "priority": 1000,
+                    "access": "Allow",
+                    "direction": "Inbound",
+                    "destinationPortRange": "3389",
+                    "protocol": "RDP",
+                    "sourcePortRange": "*",
+                    "sourceAddressPrefix": "*",
+                    "destinationAddressPrefix": "*"
+                    }
+                },
+                {
+                    "name": "Allow-https-443",
+                    "properties": {
+                    "priority": 1001,
+                    "access": "Allow",
+                    "direction": "Inbound",
+                    "destinationPortRange": "443",
+                    "protocol": "tcp",
+                    "sourcePortRange": "*",
+                    "sourceAddressPrefix": "*",
+                    "destinationAddressPrefix": "*"
+                    }
+                },
+
+                ]
+            }
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2021-02-01",
+            "name": "[parameters('AppServersNSG')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Team": "[parameters('tags')]"
+            },
+            "properties": {
+                "securityRules": [
+                {
+                    "name": "Allow-https-443",
+                    "properties": {
+                    "priority": 1000,
+                    "access": "Allow",
+                    "direction": "Inbound",
+                    "destinationPortRange": "443",
+                    "protocol": "Tcp",
+                    "sourcePortRange": "*",
+                    "sourceAddressPrefix": "*",
+                    "destinationAddressPrefix": "*"
+                    }
+                }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2021-02-01",
+            "name": "[parameters('SQLServersNSG')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Team": "[parameters('tags')]"
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2020-11-01",
+            "name": "[variables('virtualNetworkName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Team": "[parameters('tags')]"
+            },
+            "properties": {
+                "addressSpace": {
+                "addressPrefixes": [
+                    "[parameters('VnetAddressPrefix')]"
+                ]
+                },
+                "subnets": [
+                {
+                    "name": "[variables('AppSubnetName')]",
+                    "properties": {
+                        "addressPrefix": "[parameters('AppSubnetPrefix')]",
+                    "networkSecurityGroup": {
+                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('AppServersNSG'))]"
+                    }
+                    }
+                },
+                {
+                    "name":"[parameters('WebSubnetName')]",
+                    "properties": {
+                        "addressPrefix": "[parameters('WebsubnetPrefix')]",
+                    "networkSecurityGroup": {
+                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('WebServersNSG'))]"
+                    }    
+                    }
+                },
+                {
+                    "name":"[parameters('SQLSubnetName')]",
+                    "properties": {
+                        "addressPrefix": "[parameters('SQLSubnetPrefix')]",
+                    "networkSecurityGroup": {
+                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('SQLServersNSG'))]"
+                    }    
+                    }
+                },
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('AppServersNSG'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('WebServersNSG'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('SQLServersNSG'))]"
+            ]
+        },  
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[concat(parameters('WebServers')[copyIndex()],'-publicIp')]",
+            "apiVersion": "2017-08-01",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Team": "[parameters('tags')]"
+            },
+            "copy": {
+                "name": "publicIpCopy",
+                "count": "[length(parameters('WebServers'))]"
+            },
+            "sku": {
+               "name": "Standard",
+               "tier": "Regional"
+            },
+            "zones": [
+                "[string(add(mod(copyIndex(0), parameters('zoneCount')), 1))]"
+            ],
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('WebPublicLBName-publicIP')]",
+            "apiVersion": "2017-08-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            }
+        },
+        {
+            "apiVersion": "2017-08-01",
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[concat(parameters('Appservers')[copyIndex()], '-nic')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Team": "[parameters('tags')]"
+            },
+            "copy": {
+                "name": "AppNicCopy",
+                "count": "[length(parameters('AppServers'))]"
+            },
+             "dependsOn": [
+                "[resourceId('Microsoft.Network/loadBalancers', parameters('AppPrivateLBName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "[concat(parameters('Appservers')[copyIndex()], '-IpConfig')]",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('SubnetAppRef')]"
+                            },
+                            "loadBalancerBackendAddressPools": [
+                                {
+                                    "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('AppPrivateLBName')), '/backendAddressPools/', parameters('AppPrivateLBName'), '-bp')]"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "enableAcceleratedNetworking": true
+            }
+        },
+        {
+            "apiVersion": "2017-08-01",
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[concat(parameters('WebServers')[copyIndex()], '-nic')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Team": "[parameters('tags')]"
+            },
+            "copy": {
+                "name": "WebNicCopy",
+                "count": "[length(parameters('WebServers'))]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('WebServers')[copyIndex()], '-publicIp'))]",
+                "[resourceId('Microsoft.Network/loadBalancers', parameters('WebPublicLBName'))]"    
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "[concat(parameters('WebServers')[copyIndex()], '-IpConfig')]",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(parameters('WebServers')[copyIndex()], '-publicIp'))]"
+                            },
+                            "subnet": {
+                                "id": "[variables('SubnetWebRef')]"
+                            },
+                            "loadBalancerBackendAddressPools": [
+                                {
+                                    "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('WebPublicLBName')), '/backendAddressPools/', parameters('WebPublicLBName'), '-bp')]"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "enableAcceleratedNetworking": true
+            }
+        },
+        {
+            "apiVersion": "2017-08-01",
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[concat(parameters('SQLServers')[copyIndex()], '-nic')]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Team": "[parameters('tags')]"
+            },
+            "copy": {
+                "name": "SQLNicCopy",
+                "count": "[length(parameters('SQLServers'))]"
+            },
+             "dependsOn": [
+                "[resourceId('Microsoft.Network/loadBalancers', parameters('SqlPrivateLBName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "[concat(parameters('SQLServers')[copyIndex()], '-IpConfig')]",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[variables('SubnetSQLRef')]"
+                            },
+                            "loadBalancerBackendAddressPools": [
+                                {
+                                    "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('SqlPrivateLBName')), '/backendAddressPools/', parameters('SqlPrivateLBName'), '-bp')]"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "enableAcceleratedNetworking": true
+            }
+        },
+        {
+            "apiVersion": "2017-03-30",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[parameters('AppServers')[copyIndex()]]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Team": "[parameters('tags')]"
+            },
+            "copy": 
+                {
+                "name": "AppServersCopy",
+                "count": "[length(parameters('AppServers'))]"
+                },
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/', concat(parameters('AppServers')[copyIndex()], '-nic'))]"
+            ],
+            "zones": [
+                "[string(add(mod(copyIndex(0), parameters('zoneCount')), 1))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('AppServersSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('AppServers')[copyIndex()]]",
+                    "adminUsername": "[parameters('DomainAdminUsername')]",
+                    "adminPassword": "[parameters('DomainAdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('VMImagePublisher')]",
+                        "offer": "[variables('VMImageOffer')]",
+                        "sku": "[parameters('VmWindowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "createOption": "FromImage"
+                    },
+                    "dataDisks": [
+                        {
+                            "diskSizeGB": 128,
+                            "lun": 0,
+                            "createOption": "Empty"
+                        }
+                    ]
+                },
+                "licenseType": "Windows_Server",
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('AppServers')[copyIndex()], '-nic'))]"
+                        }
+                    ]
+                }             
+            }
+        },
+        {
+            "type": "Microsoft.Network/loadBalancers",
+            "sku": {
+                "name": "Standard",
+                "tier": "Regional"
+            },
+            "name": "[parameters('AppPrivateLBName')]",
+            "apiVersion": "2018-02-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines',parameters('AppServers')[copyIndex()])]"
+            ],
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "LoadBalancerFrontEnd",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "[concat(parameters('AppPrivateLBName'),'-bp')]"
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "[concat(parameters('AppPrivateLBName'),'-rule')]",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('AppPrivateLBName')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
+                            },
+                            "frontendPort": 443,
+                            "backendPort": 443,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 4,
+                            "protocol": "Tcp",
+                            "loadDistribution": "Default",
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('AppPrivateLBName')), '/backendAddressPools/', parameters('AppPrivateLBName'), '-bp')]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('AppPrivateLBName')), '/probes/', parameters('AppPrivateLBName'), '-probe')]"
+                            }
+                        }
+                    },
+					{
+                        "name": "[concat(parameters('AppPrivateLBName'),'-rule80')]",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('AppPrivateLBName')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
+                            },
+                            "frontendPort": 80,
+                            "backendPort": 80,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 4,
+                            "protocol": "Tcp",
+                            "loadDistribution": "Default",
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('AppPrivateLBName')), '/backendAddressPools/', parameters('AppPrivateLBName'), '-bp')]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('AppPrivateLBName')), '/probes/', parameters('AppPrivateLBName'), '-probe80')]"
+                            }
+                        }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "[concat(parameters('AppPrivateLBName'),'-probe')]",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "port": 443,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    },
+					{
+                        "name": "[concat(parameters('AppPrivateLBName'),'-probe80')]",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "port": 80,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    }
+                ],
+                "inboundNatRules": [],
+                "inboundNatPools": []
+            }
+        },
+        {
+            "apiVersion": "2017-03-30",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[parameters('WebServers')[copyIndex()]]",
+            "location": "[resourceGroup().location]",
+            "copy": 
+                {
+                "name": "WebServersCopy",
+                "count": "[length(parameters('WebServers'))]"
+                },
+            "tags": {
+                "Team": "[parameters('tags')]"
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/', concat(parameters('WebServers')[copyIndex()], '-nic'))]"
+            ],
+            "zones": [
+                "[string(add(mod(copyIndex(0), parameters('zoneCount')), 1))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('WebServersSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('WebServers')[copyIndex()]]",
+                    "adminUsername": "[parameters('DomainAdminUsername')]",
+                    "adminPassword": "[parameters('DomainAdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('VMImagePublisher')]",
+                        "offer": "[variables('VMImageOffer')]",
+                        "sku": "[parameters('VmWindowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "createOption": "FromImage"
+                    },
+                    "dataDisks": [
+                        {
+                            "diskSizeGB": 128,
+                            "lun": 0,
+                            "createOption": "Empty"
+                        }
+                    ]
+                },
+                "licenseType": "Windows_Server",
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('WebServers')[copyIndex()], '-nic'))]"
+                        }
+                    ]
+                }             
+            }
+        },
+        {
+            "type": "Microsoft.Network/loadBalancers",
+            "sku": {
+                "name": "Standard",
+                "tier": "Regional"
+            },
+            "name": "[parameters('WebPublicLBName')]",
+            "apiVersion": "2018-02-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', parameters('WebServers')[copyIndex()])]",
+                "[variables('WebPublicLBName-publicIP')]"
+            ],
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "LoadBalancerFrontEnd",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('WebPublicLBName-publicIP'))]"
+                            }
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "[concat(parameters('WebPublicLBName'),'-bp')]"
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "[concat(parameters('WebPublicLBName'),'-rule')]",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('WebPublicLBName')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
+                            },
+                            "frontendPort": 443,
+                            "backendPort": 443,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 4,
+                            "protocol": "Tcp",
+                            "loadDistribution": "Default",
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('WebPublicLBName')), '/backendAddressPools/', parameters('WebPublicLBName'), '-bp')]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('WebPublicLBName')), '/probes/', parameters('WebPublicLBName'), '-probe')]"
+                            }
+                        }
+                    },
+					{
+                        "name": "[concat(parameters('WebPublicLBName'),'-rule80')]",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('WebPublicLBName')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
+                            },
+                            "frontendPort": 80,
+                            "backendPort": 80,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 4,
+                            "protocol": "Tcp",
+                            "loadDistribution": "Default",
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('WebPublicLBName')), '/backendAddressPools/', parameters('WebPublicLBName'), '-bp')]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('WebPublicLBName')), '/probes/', parameters('WebPublicLBName'), '-probe80')]"
+                            }
+                        }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "[concat(parameters('WebPublicLBName'),'-probe')]",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "port": 443,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    },
+					{
+                        "name": "[concat(parameters('WebPublicLBName'),'-probe80')]",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "port": 80,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    }
+                ],
+                "inboundNatRules": [],
+                "inboundNatPools": []
+            }
+        },
+        {
+            "apiVersion": "2017-03-30",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[parameters('SQLServers')[copyIndex()]]",
+            "location": "[resourceGroup().location]",
+            "tags": {
+                "Team": "[parameters('tags')]"
+            },
+            "copy": 
+                {
+                "name": "PilotServersCopy",
+                "count": "[length(parameters('SQLServers'))]"
+                },
+            "dependsOn": [
+                "[concat('Microsoft.Network/networkInterfaces/', concat(parameters('SQLServers')[copyIndex()], '-nic'))]"
+            ],
+            "zones": [
+                "[string(add(mod(copyIndex(0), parameters('zoneCount')), 1))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('SQLServersSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[parameters('SQLServers')[copyIndex()]]",
+                    "adminUsername": "[parameters('DomainAdminUsername')]",
+                    "adminPassword": "[parameters('DomainAdminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('VMImagePublisher')]",
+                        "offer": "[variables('VMImageOffer')]",
+                        "sku": "[parameters('VmWindowsOSVersion')]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "createOption": "FromImage"
+                    },
+                    "dataDisks": [
+                        {
+                            "diskSizeGB": 128,
+                            "lun": 0,
+                            "createOption": "Empty"
+                        }
+                    ]
+                },
+                "licenseType": "Windows_Server",
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('SQLServers')[copyIndex()], '-nic'))]"
+                        }
+                    ]
+                }             
+            }
+        },
+        {
+            "type": "Microsoft.Network/loadBalancers",
+            "sku": {
+                "name": "Standard",
+                "tier": "Regional"
+            },
+            "name": "[parameters('AppPrivateLBName')]",
+            "apiVersion": "2018-02-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines',parameters('SQLServers')[copyIndex()])]"
+            ],
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "LoadBalancerFrontEnd",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "[concat(parameters('SqlPrivateLBName'),'-bp')]"
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "[concat(parameters('SqlPrivateLBName'),'-rule')]",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('SqlPrivateLBName')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
+                            },
+                            "frontendPort": 443,
+                            "backendPort": 443,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 4,
+                            "protocol": "Tcp",
+                            "loadDistribution": "Default",
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('SqlPrivateLBName')), '/backendAddressPools/', parameters('SqlPrivateLBName'), '-bp')]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('SqlPrivateLBName')), '/probes/', parameters('SqlPrivateLBName'), '-probe')]"
+                            }
+                        }
+                    },
+					{
+                        "name": "[concat(parameters('AppPrivateLBName'),'-rule80')]",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('SqlPrivateLBName')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]"
+                            },
+                            "frontendPort": 80,
+                            "backendPort": 80,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 4,
+                            "protocol": "Tcp",
+                            "loadDistribution": "Default",
+                            "backendAddressPool": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('SqlPrivateLBName')), '/backendAddressPools/', parameters('SqlPrivateLBName'), '-bp')]"
+                            },
+                            "probe": {
+                                "id": "[concat(resourceId(resourceGroup().Name, 'Microsoft.Network/loadBalancers/', parameters('SqlPrivateLBName')), '/probes/', parameters('SqlPrivateLBName'), '-probe80')]"
+                            }
+                        }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "[concat(parameters('SqlPrivateLBName'),'-probe')]",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "port": 443,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    },
+					{
+                        "name": "[concat(parameters('SqlPrivateLBName'),'-probe80')]",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "port": 80,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    }
+                ],
+                "inboundNatRules": [],
+                "inboundNatPools": []
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(parameters('AllServers')[copyIndex()],'/IaaSAntimalware')]",
+            "apiVersion": "2017-03-30",
+            "location": "[resourceGroup().location]",
+            "dependsOn": ["[concat('Microsoft.Compute/virtualMachines/', parameters('AllServers')[copyIndex()])]"],
+             "copy": {
+                "name":"MalwareExtensionsCopy",
+                "count":"[length(parameters('AllServers'))]"
+            }, 
+            "properties": {
+                "publisher": "Microsoft.Azure.Security",
+                "type": "IaaSAntimalware",
+                "typeHandlerVersion": "1.4",
+                "autoUpgradeMinorVersion": false,
+                "settings": {
+                "AntimalwareEnabled": true,
+                "RealtimeProtectionEnabled": "true",
+                "ScheduledScanSettings": {
+                    "isEnabled": "true",
+                    "scanType": "Quick",
+                    "day": "0",
+                    "time": "120"
+                }
+                },
+                "protectedSettings": null
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "apiVersion": "2018-10-01",
+            "name": "[concat(parameters('AllServers')[copyIndex()], '/', variables('MmaExtensionName'))]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": ["[concat('Microsoft.Compute/virtualMachines/', parameters('AllServers')[copyIndex()])]"],
+             "copy": {
+                "name":"MMaExtensionsCopy",
+                "count":"[length(parameters('AllServers'))]"
+            },          
+            "properties": {
+                "publisher": "Microsoft.Monitoring",
+                "type": "[variables('MmaExtensionType')]",
+                "typeHandlerVersion": "[variables('MmaExtensionVersion')]",
+                "autoUpgradeMinorVersion": "true",
+                "settings": {
+                    "workspaceId": "[parameters('LogAnalyticsWorkspaceId')]",
+                    "azureResourceId": "[resourceId('Microsoft.Compute/virtualMachines/', parameters('AllServers')[copyIndex()])]",
+                    "stopOnMultipleConnections": "true"
+                },
+                "protectedSettings": {
+                    "workspaceKey": "[parameters('LogAnalyticsWorkspaceKey')]"
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
