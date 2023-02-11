@@ -1,0 +1,81 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2021-08-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "virtualNetworkName": {
+            "value": "New-Vnet"
+        },
+        "VnetAddressPrefix": {
+            "value": "10.60.0.0/16"
+        },
+        "AppSubnetName": {
+            "value": "Appservers-Subnet" 
+        },
+        "AppSubnetPrefix": {
+            "value": "10.60.1.0/24" 
+        },
+        "WebSubnetName": {
+            "value": "Webservers-Subnet" 
+        },
+        "WebSubnetPrefix": {
+            "value": "10.60.2.0/24" 
+        },
+        "SQLSubnetName": {
+            "value": "Sqlservers-Subnet" 
+        },
+        "SQLSubnetPrefix": {
+            "value": "10.50.3.0/24" 
+        },
+        "AppServersNSG": {
+            "value": "APPNSG"
+        },
+        "WebServersNSG": {
+            "value": "WebNSG"
+        },
+        "SQLServersNSG": {
+            "value": "SQLNSG"
+        },
+        "AllServers": {
+            "value": ["AppServer00","AppServer01", "WebServer00","WebServer01", "SQLServer00","SQLServer01"]
+        },
+        "AppServers": {
+            "value": ["AppServer00","AppServer01"]
+        },
+        "WebServers": {
+            "value": ["WebServer00","WebServer01"]
+        },
+        "SQLServers": {
+            "value": ["SQLServer00","SQLServer01"]
+        },
+        "AppServersSize": {
+            "value": "Standard_Ds_v4"
+        },
+        "WebServersSize": {
+            "value": "Standard_Ds_v4"
+        },
+        "SQLServersSize": {
+            "value": "Standard_Ds_v4"
+        },
+        "DomainAdminUsername": {
+            "value": "Systemadmin"
+        },
+        "DomainAdminPassword": {
+            "value": "P@SSWord123456"
+        },
+        "VmWindowsOSVersion": {
+            "value": "2019-Datacenter"
+        },
+        "zoneCount": {
+            "value": 2
+        },
+        "LogAnalyticsWorkspaceId": {
+            "value": "1234567890123456789"
+        },
+        "LogAnalyticsWorkspaceKey": {
+            "value": "abcdefghijklmnopqrstuvwxyz-1234567890123"
+        },
+        "tags": {
+            "value": "NewTag"
+        }
+    }
+}
